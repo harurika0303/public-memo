@@ -1,5 +1,8 @@
 # Docker Compose について
 
+> 参考: [公式ドキュメント — Compose file reference](https://docs.docker.com/reference/compose-file/)  
+> 参考: [公式ドキュメント — Docker Compose overview](https://docs.docker.com/compose/)
+
 ## Docker Compose とは
 
 Docker Compose は、複数のコンテナを定義・実行するためのツールです。  
