@@ -211,6 +211,65 @@ ollama run gpt-oss:20b-cloud
 
 ---
 
+## VS Code で Agent として使う（Cline）
+
+### Continue との違い
+
+| 拡張機能  | 主な用途              | ファイル操作         | ターミナル実行 | エージェントループ |
+| --------- | --------------------- | -------------------- | -------------- | ------------------ |
+| Continue  | チャット・補完        | ❌（手動適用）        | ❌              | ❌                  |
+| **Cline** | **コーディングAgent** | ✅ 自律的に作成・編集 | ✅              | ✅                  |
+
+**Cline** は「指示を与えると自律的にファイルを作成・編集し、ターミナルも操作する」VS Code 拡張です。Ollama に対応しています。
+
+### インストール
+
+VS Code の拡張機能タブで `Cline` を検索してインストール。  
+または: `ext install saoudrizwan.claude-dev`
+
+### Ollama（gpt-oss:20b）への接続設定
+
+1. VS Code 左サイドバーの Cline アイコンをクリック
+2. 右上の設定アイコン（⚙）→ **API Provider** を選択
+3. 以下のように設定する:
+
+| 設定項目     | 値                       |
+| ------------ | ------------------------ |
+| API Provider | `Ollama`                 |
+| Base URL     | `http://localhost:11434` |
+| Model        | `gpt-oss:20b`            |
+
+4. 「Save」して完了
+
+### 使い方
+
+サイドバーの Cline チャット欄に指示を入力するだけ:
+
+```
+src/utils/date.ts というファイルを作成して、日付をフォーマットする関数を書いてください
+```
+
+Cline が以下を自律的に行います:
+
+- ファイルの新規作成・編集（変更前に差分を表示して確認を求める）
+- ターミナルでのコマンド実行（npm install など）
+- エラーが出たら自己修正
+
+### ⚠️ gpt-oss:20b 使用時の注意点
+
+- 応答が遅い場合は `reasoning_effort: low` を Cline のシステムプロンプト設定に追加する
+- Cline 設定の **Custom Instructions** 欄に以下を入力:
+  ```
+  reasoning_effort: low
+  ```
+- メモリ不足でモデルがクラッシュする場合は、Cline 設定の **Context Window** を小さくする（例: 8000 トークン）
+
+### Roo Code（Cline の派生版）
+
+Cline が動作しない場合は **Roo Code**（`rooveterinaryinc.roo-cline`）も試す価値があります。UI や設定方法はほぼ同じです。
+
+---
+
 ## ツール呼び出し（ファイル作成など）を使う
 
 ### なぜ `ollama run` ではできないのか
