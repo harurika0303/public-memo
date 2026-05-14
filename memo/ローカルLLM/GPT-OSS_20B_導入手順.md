@@ -211,6 +211,127 @@ ollama run gpt-oss:20b-cloud
 
 ---
 
+## ツール呼び出し（ファイル作成など）を使う
+
+### なぜ `ollama run` ではできないのか
+
+`ollama run` はインタラクティブなテキストチャット専用のコマンドであり、**ツール定義の送信・ツール呼び出し結果の返却** に対応していません。  
+ツール呼び出し（Function Calling）を使うには **Ollama REST API** をコードから直接叩く必要があります。
+
+### 仕組み
+
+```
+1. ツール定義（関数名・引数の JSON スキーマ）をリクエストに含めて送信
+2. モデルがツールの呼び出しを返す（tool_calls）
+3. コード側でツールを実行（例: ファイル作成）
+4. 実行結果をモデルに返す → 最終的な回答を受け取る
+```
+
+### Python での実装例（ファイル作成ツール）
+
+```bash
+pip install ollama
+```
+
+```python
+import ollama
+import json
+import os
+
+# ---- ツール定義 ----
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_file",
+            "description": "指定したパスにファイルを作成し、内容を書き込む",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "作成するファイルのパス（例: ./output/hello.txt）"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "ファイルに書き込む内容"
+                    }
+                },
+                "required": ["path", "content"]
+            }
+        }
+    }
+]
+
+# ---- ツールの実装 ----
+def create_file(path: str, content: str) -> str:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return f"ファイルを作成しました: {path}"
+
+# ---- エージェントループ ----
+messages = [
+    {"role": "user", "content": "./output/hello.txt というファイルを作成して、「こんにちは！」と書いてください。"}
+]
+
+response = ollama.chat(
+    model="gpt-oss:20b",
+    messages=messages,
+    tools=tools
+)
+
+# ツール呼び出しがあれば実行して結果を返す
+while response.message.tool_calls:
+    for tool_call in response.message.tool_calls:
+        name = tool_call.function.name
+        args = tool_call.function.arguments  # dict
+
+        # ツールを実行
+        if name == "create_file":
+            result = create_file(**args)
+        else:
+            result = f"不明なツール: {name}"
+
+        print(f"[ツール実行] {name}({args}) → {result}")
+
+        # 結果をメッセージに追加
+        messages.append(response.message)
+        messages.append({
+            "role": "tool",
+            "content": result
+        })
+
+    # 結果をもとにモデルが最終回答を生成
+    response = ollama.chat(
+        model="gpt-oss:20b",
+        messages=messages,
+        tools=tools
+    )
+
+print("モデルの回答:", response.message.content)
+```
+
+### 実行例
+
+```
+[ツール実行] create_file({'path': './output/hello.txt', 'content': 'こんにちは！'}) → ファイルを作成しました: ./output/hello.txt
+モデルの回答: ./output/hello.txt を作成し、「こんにちは！」と書き込みました。
+```
+
+### ポイント
+
+| 項目                          | 説明                                                           |
+| ----------------------------- | -------------------------------------------------------------- |
+| `ollama.chat()` の `tools`    | ツール定義の JSON スキーマを渡す                               |
+| `response.message.tool_calls` | モデルが呼び出したいツールのリスト                             |
+| `role: "tool"`                | ツール実行結果をモデルに返すメッセージ形式                     |
+| ループ                        | モデルが複数のツールを連続で呼ぶ場合があるためループ処理が必要 |
+
+> `reasoning_effort: low` をシステムプロンプトに設定するとツール呼び出しも速くなります。
+
+---
+
 ## 参考リンク
 
 - [OpenAI 公式発表 - gpt-oss が登場](https://openai.com/ja-JP/index/introducing-gpt-oss/)
