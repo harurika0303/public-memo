@@ -93,7 +93,49 @@ ssh -T git@gitlab.com
 # 成功時: "Welcome to GitLab, <username>!"
 ```
 
-> 参考:
-> - [Use SSH keys with GitLab - GitLab公式ドキュメント](https://docs.gitlab.com/ee/user/ssh.html)
-> - [Advanced SSH key configuration - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_advanced/)
-> - [SSH troubleshooting - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_troubleshooting/)
+---
+
+## その他の注意点
+
+### SSHエージェントはWSL再起動のたびにリセットされる
+
+`eval "$(ssh-agent -s)"` はセッションごとに実行が必要。`.bashrc` に追記しておくと自動化できる。
+
+```bash
+# ~/.bashrc に追記
+eval "$(ssh-agent -s)" > /dev/null
+ssh-add ~/.ssh/id_ed25519 2>/dev/null
+```
+
+### SSHキーに有効期限が設定されている場合
+
+GitLabではSSHキーに有効期限を設定できる。期限切れのキーは認証不可になる。
+**アバター > Edit profile > Access > SSH keys** で有効期限を確認できる。
+
+### ポート22がブロックされているネットワーク
+
+会社のネットワーク等でポート22が塞がれている場合、GitLab.comはポート443でのSSH接続もサポートしている。
+
+```
+# ~/.ssh/config に追記
+Host gitlab.com
+  HostName altssh.gitlab.com
+  User git
+  Port 443
+  IdentityFile ~/.ssh/id_ed25519
+```
+
+### `known_hosts` の再確認
+
+WSL再インストールで `~/.ssh/known_hosts` が消えるため、初回接続時にホスト認証のプロンプトが出る。
+`yes` と答える前にGitLabの公式フィンガープリントと一致しているか確認する。
+
+> GitLab.comのフィンガープリント一覧: https://docs.gitlab.com/user/gitlab_com/#ssh-host-keys-fingerprints
+
+---
+
+## 参考
+
+- [Use SSH keys with GitLab - GitLab公式ドキュメント](https://docs.gitlab.com/ee/user/ssh.html)
+- [Advanced SSH key configuration - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_advanced/)
+- [SSH troubleshooting - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_troubleshooting/)
