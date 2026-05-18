@@ -42,7 +42,7 @@ ls ~/.ssh/
 | ED25519（推奨）    | `id_ed25519.pub` | `id_ed25519` |
 | RSA（4096bit以上） | `id_rsa.pub`     | `id_rsa`     |
 
-既存の鍵を使う場合は Step 2 へ。
+既存の鍵を使う場合は Step 2 をスキップして Step 3 へ。
 
 ---
 
@@ -133,6 +133,20 @@ ssh -vT git@gitlab.com
 ```
 
 よくある原因：
-- `~/.ssh/` のパーミッション不足 → `chmod 700 ~/.ssh && chmod 600 ~/.ssh/id_ed25519`
+- `~/.ssh/` のパーミッション不足 → 以下のコマンドで修正
+  ```bash
+  chmod 700 ~/.ssh
+  chmod 600 ~/.ssh/id_ed25519      # 秘密鍵
+  chmod 644 ~/.ssh/id_ed25519.pub  # 公開鍵
+  # RSAの場合: chmod 600 ~/.ssh/id_rsa && chmod 644 ~/.ssh/id_rsa.pub
+  ```
 - GitLabに登録した公開鍵と手元の秘密鍵が不一致（WSL再インストール後に多い）
 - SSHエージェントに鍵が登録されていない
+
+---
+
+## 参考
+
+- [Use SSH keys with GitLab - GitLab公式ドキュメント](https://docs.gitlab.com/ee/user/ssh.html)
+- [Advanced SSH key configuration - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_advanced/)
+- [SSH troubleshooting - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_troubleshooting/)

@@ -12,8 +12,9 @@ WSLが壊れてUbuntuを再インストールした後、GitLabにSSHキーを�
 
 ```bash
 chmod 700 ~/.ssh
-chmod 600 ~/.ssh/id_rsa        # 秘密鍵
-chmod 644 ~/.ssh/id_rsa.pub    # 公開鍵
+chmod 600 ~/.ssh/id_ed25519      # 秘密鍵（ED25519の場合）
+chmod 644 ~/.ssh/id_ed25519.pub  # 公開鍵（ED25519の場合）
+# RSAの場合: chmod 600 ~/.ssh/id_rsa && chmod 644 ~/.ssh/id_rsa.pub
 ```
 
 ### 2. SSHエージェントに鍵が登録されていない
@@ -92,4 +93,7 @@ ssh -T git@gitlab.com
 # 成功時: "Welcome to GitLab, <username>!"
 ```
 
-> 参考: [GitLab公式ドキュメント - Use SSH keys with GitLab](https://docs.gitlab.com/ee/user/ssh.html)
+> 参考:
+> - [Use SSH keys with GitLab - GitLab公式ドキュメント](https://docs.gitlab.com/ee/user/ssh.html)
+> - [Advanced SSH key configuration - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_advanced/)
+> - [SSH troubleshooting - GitLab公式ドキュメント](https://docs.gitlab.com/user/ssh_troubleshooting/)
