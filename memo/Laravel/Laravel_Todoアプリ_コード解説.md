@@ -877,6 +877,99 @@ flowchart LR
 <input type="text" name="title" value="{{ old('title') }}">
 ```
 
+### 10-6. エラーメッセージの管理
+
+このアプリのエラーメッセージは **2種類** あり、どちらも `todos/partials/alerts.blade.php` 1ファイルで一元管理している。
+
+#### 2種類のメッセージ
+
+| 種類                 | 発生元                                       | 格納方法             | Bladeでの取り出し                   | 表示スタイル          |
+| -------------------- | -------------------------------------------- | -------------------- | ----------------------------------- | --------------------- |
+| バリデーションエラー | `$request->validate()` 失敗 / `withErrors()` | セッションに自動格納 | `$errors->any()` / `$errors->all()` | 赤（`alert-error`）   |
+| フラッシュメッセージ | `redirect()->with('status', '...')`          | セッションに手動格納 | `session('status')`                 | 緑（`alert-success`） |
+
+#### 管理ファイル（alerts.blade.php）
+
+```blade
+{{-- todos/partials/alerts.blade.php --}}
+
+{{-- 成功メッセージ（フラッシュ） --}}
+@if (session('status'))
+    <div class="alert alert-success">{{ session('status') }}</div>
+@endif
+
+{{-- バリデーションエラー --}}
+@if ($errors->any())
+    <div class="alert alert-error">
+        <ul class="alert-list">
+            @foreach ($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+```
+
+このファイルを `@include('todos.partials.alerts')` で各ページに読み込むだけでよい。
+
+#### $errors の仕組み（セッション経由）
+
+バリデーション失敗時、Laravelは内部で以下の処理を自動的に行う。
+
+```mermaid
+sequenceDiagram
+    participant Controller as コントローラー
+    participant Session as セッション
+    participant Blade as Bladeテンプレート
+
+    Controller->>Controller: $request->validate() 失敗
+    Controller->>Session: エラーメッセージをセッションに格納<br>（_errors キーで1リクエストだけ保持）
+    Controller-->>Browser: 前のページへリダイレクト
+    Browser->>Blade: 次のリクエストでページを表示
+    Session->>Blade: $errors 変数として自動的に渡す
+    Note over Session: 取り出し後はセッションから自動削除
+    Blade->>Blade: $errors->any() でエラー有無を確認
+    Blade->>Blade: $errors->all() で全メッセージを表示
+```
+
+#### withErrors() — 手動でエラーを格納する場合
+
+`$request->validate()` はルールに合わない場合に自動でエラーを格納するが、  
+`AuthController@login` では認証失敗という「DBを見て初めて分かるエラー」のため、  
+`withErrors()` で手動格納している。
+
+```php
+// AuthController@login
+if (! Auth::attempt($credentials)) {
+    return back()
+        ->withInput($request->only('email'))   // email の入力値を保持
+        ->withErrors([
+            'email' => 'メールアドレスまたはパスワードが正しくありません。'
+            //  ↑ $errors に手動でメッセージを追加
+        ]);
+}
+```
+
+#### フラッシュメッセージ（成功通知）の仕組み
+
+```mermaid
+sequenceDiagram
+    participant Controller as コントローラー
+    participant Session as セッション
+    participant Blade as Bladeテンプレート
+
+    Controller->>Session: redirect()->with('status', 'Todoを追加しました。')<br>セッションにフラッシュデータとして格納
+    Controller-->>Browser: 一覧ページへリダイレクト
+    Browser->>Blade: 次のリクエストでページを表示
+    Session->>Blade: session('status') で取り出せる
+    Note over Session: 取り出し後はセッションから自動削除
+    Blade->>Blade: alert-success として表示
+```
+
+#### $errors と session('status') の共通点
+
+どちらも **フラッシュデータ**（セッションに1リクエストだけ保持されるデータ）として管理されており、表示後は自動的に削除される。
+
 ---
 
 ## 11. ドラッグ＆ドロップ並び替え機能
