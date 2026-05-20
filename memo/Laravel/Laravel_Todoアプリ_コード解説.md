@@ -725,7 +725,29 @@ abort_unless($todo->user_id === Auth::id(), 403);
 
 > 公式: [Validation](https://laravel.com/docs/validation)
 
-### 10-1. バリデーションルール一覧
+このアプリのバリデーションは **フロントエンド（HTML5）** と **サーバーサイド（Laravel）** の2段階で行われている。
+
+### 10-1. バリデーションの記載場所
+
+#### フロントエンドバリデーション（HTML5属性）
+
+**記載場所: `resources/views/` 以下のBladeファイル**
+
+ブラウザが送信前に自動チェックする。JavaScriptは不要。
+
+| ファイル                               | フィールド            | HTML属性                       | 意味                               |
+| -------------------------------------- | --------------------- | ------------------------------ | ---------------------------------- |
+| `auth/register.blade.php`              | name                  | `type="text"` + `required`     | 空欄不可                           |
+| `auth/register.blade.php`              | email                 | `type="email"` + `required`    | メール形式チェック＋空欄不可       |
+| `auth/register.blade.php`              | password              | `type="password"` + `required` | 空欄不可                           |
+| `auth/register.blade.php`              | password_confirmation | `type="password"` + `required` | 空欄不可                           |
+| `auth/login.blade.php`                 | email                 | `type="email"` + `required`    | メール形式チェック＋空欄不可       |
+| `auth/login.blade.php`                 | password              | `type="password"` + `required` | 空欄不可                           |
+| `todos/partials/create-form.blade.php` | title                 | `maxlength="255"` のみ         | 255文字制限のみ（`required` なし） |
+
+#### サーバーサイドバリデーション（Laravel）
+
+**記載場所: `app/Http/Controllers/` 以下のコントローラー**
 
 ```php
 // AuthController@register
@@ -733,6 +755,12 @@ $request->validate([
     'name'     => ['required', 'string', 'max:255'],
     'email'    => ['required', 'string', 'email', 'max:255', 'unique:users'],  // users.emailに重複不可
     'password' => ['required', 'string', 'min:8', 'confirmed'],               // password_confirmationと一致確認
+]);
+
+// AuthController@login
+$request->validate([
+    'email'    => ['required', 'string', 'email'],
+    'password' => ['required', 'string'],
 ]);
 
 // TodoController@store
@@ -752,13 +780,75 @@ $request->validate([
 ]);
 ```
 
-### 10-2. バリデーション失敗時の動作
+### 10-2. 処理の流れ（2段階バリデーション）
 
-- バリデーション失敗 → **自動的に前のページへリダイレクト**
-- エラーメッセージは `$errors` 変数としてBladeテンプレートで受け取れる
+```mermaid
+sequenceDiagram
+    participant Browser as ブラウザ
+    participant HTML5 as HTML5バリデーション<br>(ブラウザ内)
+    participant Server as Laravelサーバー<br>$request->validate()
+    participant DB as データベース
+
+    Browser->>HTML5: フォーム送信ボタンを押す
+
+    alt HTML5バリデーション失敗（例: email形式が違う）
+        HTML5-->>Browser: ブラウザのエラーメッセージを表示<br>サーバーにはリクエストを送らない
+    else HTML5バリデーション通過
+        HTML5->>Server: POSTリクエスト送信
+        Server->>Server: $request->validate([...]) 実行
+        alt Laravelバリデーション失敗（例: emailが重複）
+            Server-->>Browser: 直前のページへリダイレクト<br>$errors にエラー内容を格納<br>old() で入力値を保持
+            Browser->>Browser: Blade側で $errors->any() を検出し<br>エラーメッセージを表示
+        else Laravelバリデーション通過
+            Server->>DB: INSERT / UPDATE 実行
+            DB-->>Server: 成功
+            Server-->>Browser: 成功ページへリダイレクト<br>flash('status', '...')
+        end
+    end
+```
+
+### 10-3. 重要なポイント
+
+#### フロントのバリデーションは「迂回できる」
+
+HTML5の `required` や `type="email"` はブラウザが行うチェックなので、開発者ツールやcurlで直接POSTすればスキップできてしまう。
+
+```bash
+# required をスキップしてPOSTできる例
+curl -X POST http://localhost:8080/todos -d "title="
+```
+
+そのため**サーバーサイドバリデーションが本当のセキュリティライン**になる。フロントのバリデーションはあくまでUX向上（送信前に即座にフィードバック）が目的。
+
+#### `create-form.blade.php` には `required` がない
 
 ```blade
-{{-- 使用例: todos/partials/alerts.blade.php --}}
+{{-- フロントには required がない --}}
+<input type="text" name="title" maxlength="255">
+```
+
+```php
+// サーバー側では required を設定している
+$request->validate(['title' => ['required', ...]]);
+```
+
+`title` の入力欄はHTMLに `required` がないため空欄のまま送信ボタンを押せてしまうが、サーバー側で `required` チェックがあるため最終的には弾かれる。フロントのチェックが甘い実装といえる。
+
+#### `unique:users` はサーバーサイドでしか判定できない
+
+DBに同じメールアドレスが既に存在するかどうかはブラウザ側では確認できない。
+
+```php
+'email' => ['unique:users'] // DBのusersテーブルにないことを確認
+```
+
+### 10-4. バリデーション失敗時のエラー表示
+
+バリデーション失敗 → **自動的に前のページへリダイレクト**  
+エラーメッセージは `$errors` 変数としてBladeテンプレートで受け取れる。
+
+```blade
+{{-- todos/partials/alerts.blade.php --}}
 @if ($errors->any())
     <div class="alert alert-error">
         <ul>
@@ -770,7 +860,16 @@ $request->validate([
 @endif
 ```
 
-### 10-3. 入力値の保持（old()）
+```mermaid
+flowchart LR
+    A["$request->validate() 失敗"] -->|自動リダイレクト| B["$errors 変数に\nエラーが入る"]
+    B --> C["Blade: $errors->any()"]
+    C --> D["エラーメッセージを画面表示"]
+
+    E["old('name')"] --> F["前回入力した値を\ninputのvalueに復元"]
+```
+
+### 10-5. 入力値の保持（old()）
 
 バリデーション失敗後に入力値をフォームに残す。
 
